@@ -1,0 +1,88 @@
+import random
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+
+class Roll:
+    def __init__(self, dice_type, num_rolls):
+        self.dice_type = dice_type
+        self.num_rolls = num_rolls
+
+    def roll(self):
+        rolls = [random.randint(1, self.dice_type) for i in range(self.num_rolls)]
+        return rolls
+
+    def total(self, rolls):
+        return sum(rolls)
+
+class Menu:
+    def __init__(self):
+        self.keyboard = [
+            [InlineKeyboardButton("D4", callback_data='D4')],
+            [InlineKeyboardButton("D6", callback_data='D6')],
+            [InlineKeyboardButton("D8", callback_data='D8')],
+            [InlineKeyboardButton("D10", callback_data='D10')],
+            [InlineKeyboardButton("D12", callback_data='D12')],
+            [InlineKeyboardButton("D20", callback_data='D20')],
+            [InlineKeyboardButton("D100", callback_data='D100')]
+        ]
+        self.reply_markup = InlineKeyboardMarkup(self.keyboard)
+
+class Count_roll_dice:
+    def __init__(self, dice_type):
+        self.dice_type = dice_type
+        self.keyboard = [
+            [InlineKeyboardButton("1", callback_data='1')],
+            [InlineKeyboardButton("2", callback_data='2')],
+            [InlineKeyboardButton("3", callback_data='3')],
+            [InlineKeyboardButton("4", callback_data='4')],
+            # [InlineKeyboardButton("Back", callback_data='back')]
+        ]
+        self.reply_markup = InlineKeyboardMarkup(self.keyboard)
+
+def start(update: Update, context: CallbackContext) -> None:
+    menu = Menu()
+    update.message.reply_text('Choose a dice:', reply_markup=menu.reply_markup)
+
+def stop(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text('Stopping the bot...')
+    context.bot.stop()
+
+def dice_type_selected(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    count_roll_dice = Count_roll_dice(query.data)
+    query.edit_message_text('How many rolls?', reply_markup=count_roll_dice.reply_markup)
+
+    context.user_data['dice_type'] = query.data
+
+def num_rolls_selected(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    num_rolls = int(query.data)
+
+    dice_type = context.user_data['dice_type']
+    roll = Roll(int(dice_type[1:]), num_rolls)
+    rolls = roll.roll()
+
+    total = roll.total(rolls)
+    rolls_str = ', '.join(str(r) for r in rolls)
+
+    # get the user's first name if available, otherwise username
+    user_name = update.effective_user.first_name or update.effective_user.username
+    response_text = f"{user_name}   rolled   {num_rolls}x{dice_type}   and got   {rolls_str}.\nTotal: {total}"
+    query.edit_message_text(response_text)
+
+bot_token = ''
+
+if __name__ == '__main__':
+    updater = Updater(bot_token, use_context=True)
+
+    updater.dispatcher.add_handler(CommandHandler('roll', start))
+    updater.dispatcher.add_handler(CommandHandler('stop', stop))
+    updater.dispatcher.add_handler(CallbackQueryHandler(dice_type_selected, pattern='^D\d+$'))
+    updater.dispatcher.add_handler(CallbackQueryHandler(num_rolls_selected, pattern='^[1-4]$'))
+
+    updater.start_polling()
+    updater.idle()
